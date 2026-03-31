@@ -1,0 +1,19 @@
+# Example configuration for MRI multi-organ segmentation
+input_dir: ./data/input_mri
+output_dir: ./data/output_seg
+
+task: total_mr
+roi_subset: null
+fast: false
+ml: true
+preview: true
+num_threads: 1
+keep_temp: false
+dry_run: false
+
+# Supported: .nii, .nii.gz, .mha, .nrrd
+supported_extensions:
+  - .nii
+  - .nii.gz
+  - .mha
+  - .nrrd
