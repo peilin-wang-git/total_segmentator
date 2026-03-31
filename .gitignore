@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+*.log
+*.nii
+*.nii.gz
+*.mha
+*.nrrd
+output/
