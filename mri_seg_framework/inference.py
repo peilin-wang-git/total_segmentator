@@ -88,9 +88,8 @@ class TotalSegmentatorRunner:
             cmd.append("--ml")
         if self.roi_subset:
             cmd.extend(["--roi_subset", *self.roi_subset])
-        if self.device == "cpu":
-            cmd.append("--device")
-            cmd.append("cpu")
+        if self.device in {"cpu", "gpu"}:
+            cmd.extend(["--device", self.device])
 
         subprocess.run(cmd, check=True)
 

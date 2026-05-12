@@ -137,9 +137,12 @@ class SegmentationPipeline:
                     entry["intensity_colorbar_path"] = str(colorbar_path)
 
                 if self.cfg.preview and preview_input is not None:
-                    preview_path = case_output / "preview_overlay.png"
-                    save_overlay_preview(preview_input, seg_path, preview_path)
-                    entry["preview_path"] = str(preview_path)
+                    if is_4d_case:
+                        self.logger.warning("4D case %s: skip save_overlay_preview; no slice-by-slice preview image here.", case_id)
+                    else:
+                        preview_path = case_output / "preview_overlay.png"
+                        save_overlay_preview(preview_input, seg_path, preview_path)
+                        entry["preview_path"] = str(preview_path)
 
                 overlay_dir = case_output / "overlay_slices_jpg"
                 overlay_input = normalized_qc_path if normalized_qc_path is not None else input_file
