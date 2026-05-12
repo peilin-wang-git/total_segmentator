@@ -147,8 +147,7 @@ image_path
 ```bash
 python -m mri_seg_framework.cli \
   --input-csv /abs/path/to/images.csv \
-  --output-suffix _totalseg \
-  --output-dir ./data/output_seg
+  --output-suffix _totalseg
 ```
 
 说明：
@@ -157,6 +156,7 @@ python -m mri_seg_framework.cli \
 - 路径必须是绝对路径；
 - 仅处理支持的医学影像后缀（`.nii`、`.nii.gz`、`.mha`、`.nrrd`）。
 - 可通过 `--output-suffix` 指定输出分割文件后缀（默认 `_seg`，例如 `_totalseg`）。
+- 使用 `--input-csv` 时，`--output-dir` 可省略；省略后默认使用 `CSV所在目录/seg_run_outputs` 保存 `run.log`、`summary.json`、`summary.csv`、临时文件等运行产物。
 
 ---
 

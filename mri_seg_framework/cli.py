@@ -29,11 +29,18 @@ def main() -> None:
     if args.config:
         cfg = SegmentationConfig.from_yaml(args.config, input_dir=args.input_dir, output_dir=args.output_dir)
     else:
-        if args.output_dir is None:
-            parser.error("--output-dir is required when --config is not provided.")
         if args.input_dir is None and args.input_csv is None:
             parser.error("Either --input-dir or --input-csv must be provided when --config is not provided.")
-        cfg = SegmentationConfig(input_dir=args.input_dir or Path("."), output_dir=args.output_dir)
+
+        if args.output_dir is None:
+            if args.input_csv is not None:
+                default_output_dir = args.input_csv.parent / "seg_run_outputs"
+            else:
+                parser.error("--output-dir is required when --config is not provided and --input-csv is not used.")
+        else:
+            default_output_dir = args.output_dir
+
+        cfg = SegmentationConfig(input_dir=args.input_dir or Path("."), output_dir=default_output_dir)
 
     cfg.input_csv = args.input_csv
     cfg.output_suffix = args.output_suffix
