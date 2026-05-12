@@ -17,7 +17,7 @@ from .io_utils import case_id_from_path, load_mri_files_from_csv, scan_mri_files
 from .logging_utils import setup_logger
 from .postprocessing import clean_small_components, save_label_map
 from .preprocessing import prepare_for_inference, save_intensity_colorbar_preview
-from .visualization import save_overlay_preview
+from .visualization import save_overlay_preview, save_overlay_slices_jpg
 
 
 class SegmentationPipeline:
@@ -67,6 +67,7 @@ class SegmentationPipeline:
                 "seg_nonzero_after_clean": None,
                 "normalized_image_path": "",
                 "intensity_colorbar_path": "",
+                "overlay_slices_dir": "",
             }
 
             try:
@@ -101,6 +102,11 @@ class SegmentationPipeline:
                     preview_path = case_output / "preview_overlay.png"
                     save_overlay_preview(preview_input, seg_path, preview_path)
                     entry["preview_path"] = str(preview_path)
+
+                overlay_dir = case_output / "overlay_slices_jpg"
+                overlay_input = normalized_qc_path if normalized_qc_path is not None else input_file
+                save_overlay_slices_jpg(overlay_input, seg_path, overlay_dir)
+                entry["overlay_slices_dir"] = str(overlay_dir)
 
                 final_seg_path = self._save_seg_to_input_path(input_file, seg_path)
                 entry["segmentation_path"] = str(final_seg_path)

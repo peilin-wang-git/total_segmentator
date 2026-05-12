@@ -191,14 +191,7 @@ python -m mri_seg_framework.cli \
 - `<case_id>/preview_overlay.png`: 叠加预览图（可选）
 - `<case_id>/normalized_input.nii.gz`: 标准化后的推理输入图像（用于质检）
 - `<case_id>/normalized_intensity_colorbar.png`: 标准化图像切片 + intensity colorbar（用于检查对比度）
-
-- 使用 `--input-dir` 时：
-  - `output_dir` 下生成 `run.log`、`summary.json/csv`、以及每个 `<case_id>/` 子目录输出。
-- 使用 `--input-csv` 时：
-  - 每个病例输出目录直接保存在该图像输入路径下，目录名为 `原文件名_totalseg`（例如 `/a/b/case1.nii.gz -> /a/b/case1_totalseg/`），其中包含 `segmentation.nii.gz`、`labels.json`、`preview_overlay.png`（可选）。
-- 分割标签图会保存到原图同目录，文件名格式：`原文件名<output_suffix>.原后缀`。
-  - 默认：`case1.nii.gz -> case1_seg.nii.gz`
-  - 自定义：`--output-suffix _totalseg` 时为 `case1_totalseg.nii.gz`
+- `<case_id>/overlay_slices_jpg/`: 每个 slice 的分割叠加 JPG 序列（3D 或 4D 分 frame 存储）
 
 - 使用 `--input-dir` 时：
   - `output_dir` 下生成 `run.log`、`summary.json/csv`、以及每个 `<case_id>/` 子目录输出。
