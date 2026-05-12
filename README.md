@@ -132,14 +132,46 @@ python -m mri_seg_framework.cli \
   --no-preview
 ```
 
+### 7.5 使用 CSV（绝对路径）加载数据
+
+当数据分散在不同目录时，可通过 CSV 第一列提供图像**绝对路径**：
+
+```csv
+image_path
+/data/site_a/case001.nii.gz
+/data/site_b/patient_12/scan.mha
+```
+
+运行示例：
+
+```bash
+python -m mri_seg_framework.cli \
+  --input-csv /abs/path/to/images.csv \
+  --device gpu \
+  --gpu-id 1 \
+  --output-suffix _totalseg
+```
+
+说明：
+
+- CSV 默认读取第一列作为输入路径；
+- 路径必须是绝对路径；
+- 仅处理支持的医学影像后缀（`.nii`、`.nii.gz`、`.mha`、`.nrrd`）。
+- 可通过 `--output-suffix` 指定输出分割文件后缀（默认 `_seg`，例如 `_totalseg`）。
+- 使用 `--input-csv` 时，`--output-dir` 可省略；省略后默认使用 `CSV所在目录/seg_run_outputs` 保存 `run.log`、`summary.json`、`summary.csv`、临时文件等运行产物。
+- 可通过 `--device` 选择推理设备（`gpu` 或 `cpu`，默认 `gpu`）。
+- 当 `--device gpu` 时，可通过 `--gpu-id` 指定使用第几块 GPU（默认 `0`）。
+
 ---
 
 ## 8. 输入输出说明
 
 ### 输入
 
-- 必须为目录（支持递归）
-- 支持扩展名：`.nii`、`.nii.gz`、`.mha`、`.nrrd`
+- 支持两种输入方式：
+  1. `--input-dir`：目录递归扫描；
+  2. `--input-csv`：CSV 第一列为绝对路径。
+- 支持扩展名：`.nii`、`.nii.gz`、`.mha`、`.nrrd`。
 
 ### 输出
 
@@ -150,6 +182,14 @@ python -m mri_seg_framework.cli \
 - `<case_id>/segmentation.nii.gz`: 分割标签图
 - `<case_id>/labels.json`: 标签值与器官名称映射
 - `<case_id>/preview_overlay.png`: 叠加预览图（可选）
+
+- 使用 `--input-dir` 时：
+  - `output_dir` 下生成 `run.log`、`summary.json/csv`、以及每个 `<case_id>/` 子目录输出。
+- 使用 `--input-csv` 时：
+  - 每个病例输出目录直接保存在该图像输入路径下，目录名为 `原文件名_totalseg`（例如 `/a/b/case1.nii.gz -> /a/b/case1_totalseg/`），其中包含 `segmentation.nii.gz`、`labels.json`、`preview_overlay.png`（可选）。
+- 分割标签图会保存到原图同目录，文件名格式：`原文件名<output_suffix>.原后缀`。
+  - 默认：`case1.nii.gz -> case1_seg.nii.gz`
+  - 自定义：`--output-suffix _totalseg` 时为 `case1_totalseg.nii.gz`
 
 ---
 
@@ -207,4 +247,3 @@ cat data/output_seg/summary.csv
 - **支持器官范围**：由 `total_mr` 任务对应标签定义决定，标签映射输出在每个病例 `labels.json` 中。
 - **模型与权重来源**：`TotalSegmentator` 开源项目（运行时自动下载权重）。
 - **已知失败场景**：输入损坏、维度异常、非 MRI/非目标解剖区域、极端伪影等。
-
