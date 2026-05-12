@@ -29,6 +29,8 @@ class SegmentationPipeline:
             fast=self.cfg.fast,
             ml=self.cfg.ml,
             roi_subset=self.cfg.roi_subset,
+            device=self.cfg.device,
+            gpu_id=self.cfg.gpu_id,
         )
         self.tmp_root = self.cfg.output_dir / "tmp"
 
@@ -68,9 +70,9 @@ class SegmentationPipeline:
                 temp_dir = self.tmp_root / case_id
                 temp_dir.mkdir(parents=True, exist_ok=True)
                 seg_path = case_output / "segmentation.nii.gz"
-                label_map, preview_input = self._run_single_or_4d(input_file, temp_dir, seg_path)
-
-                clean_small_components(seg_path)
+                label_map, preview_input, is_4d_case = self._run_single_or_4d(input_file, temp_dir, seg_path)
+                if not is_4d_case:
+                    clean_small_components(seg_path)
                 save_label_map(label_map, case_output / "labels.json")
 
                 if self.cfg.preview and preview_input is not None:
@@ -125,11 +127,11 @@ class SegmentationPipeline:
                 break
         return input_file.parent / f"{image_stem}_totalseg"
 
-    def _run_single_or_4d(self, input_file: Path, temp_dir: Path, seg_path: Path) -> tuple[Dict[int, str], Optional[Path]]:
+    def _run_single_or_4d(self, input_file: Path, temp_dir: Path, seg_path: Path) -> tuple[Dict[int, str], Optional[Path], bool]:
         image = sitk.ReadImage(str(input_file))
         if image.GetDimension() < 4:
             normalized_input = prepare_for_inference(input_file, temp_dir)
-            return self.runner.run(normalized_input, seg_path), normalized_input
+            return self.runner.run(normalized_input, seg_path), normalized_input, False
 
         frame_count = image.GetSize()[3]
         frame_outputs: List[sitk.Image] = []
@@ -143,9 +145,10 @@ class SegmentationPipeline:
             frame_norm = prepare_for_inference(frame_path, temp_dir)
             frame_seg = temp_dir / f"frame_{i:04d}_seg.nii.gz"
             label_map = self.runner.run(frame_norm, frame_seg)
+            clean_small_components(frame_seg)
             frame_outputs.append(sitk.ReadImage(str(frame_seg)))
 
         seg_4d = sitk.JoinSeries(frame_outputs)
         seg_4d.CopyInformation(image)
         sitk.WriteImage(seg_4d, str(seg_path))
-        return label_map, None
+        return label_map, None, True

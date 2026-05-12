@@ -16,6 +16,8 @@ class SegmentationConfig:
     output_dir: Path
     input_csv: Optional[Path] = None
     output_suffix: str = "_seg"
+    device: str = "gpu"
+    gpu_id: int = 0
     task: str = "total_mr"
     roi_subset: Optional[List[str]] = None
     fast: bool = False
