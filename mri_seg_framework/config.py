@@ -18,6 +18,7 @@ class SegmentationConfig:
     output_suffix: str = "_seg"
     device: str = "gpu"
     gpu_id: int = 0
+    intensity_norm: str = "none"
     task: str = "total_mr"
     roi_subset: Optional[List[str]] = None
     fast: bool = False

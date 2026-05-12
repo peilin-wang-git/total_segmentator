@@ -142,7 +142,7 @@ class SegmentationPipeline:
     def _run_single_or_4d(self, input_file: Path, temp_dir: Path, seg_path: Path) -> tuple[Dict[int, str], Optional[Path], bool]:
         image = sitk.ReadImage(str(input_file))
         if image.GetDimension() < 4:
-            normalized_input = prepare_for_inference(input_file, temp_dir)
+            normalized_input = prepare_for_inference(input_file, temp_dir, intensity_norm=self.cfg.intensity_norm)
             return self.runner.run(normalized_input, seg_path), normalized_input, False
 
         frame_count = image.GetSize()[3]
@@ -154,7 +154,7 @@ class SegmentationPipeline:
             frame_path = temp_dir / f"frame_{i:04d}.nii.gz"
             sitk.WriteImage(frame, str(frame_path))
 
-            frame_norm = prepare_for_inference(frame_path, temp_dir)
+            frame_norm = prepare_for_inference(frame_path, temp_dir, intensity_norm=self.cfg.intensity_norm)
             frame_seg = temp_dir / f"frame_{i:04d}_seg.nii.gz"
             label_map = self.runner.run(frame_norm, frame_seg)
             clean_small_components(frame_seg)
