@@ -176,6 +176,8 @@ python -m mri_seg_framework.cli \
   - `zscore_robust`：基于 median/MAD 的鲁棒标准化；
   - `itksnap_window`：按 case 自适应窗宽窗位（基于 Otsu 前景 + 对比度统计）后映射到 [0,1]。
 - 推理前会先将图像方向标准化到 LPS 以稳定推理；case 完成后会将分割结果与标准化质检图像重新变换回原始方向。
+- 默认启用官方兼容路径（`official_compatible`）：尽量贴近 TotalSegmentator 官方流程，避免额外归一化/后处理。可通过 `--no-official-compatible` 关闭。
+- 推理调用会直接使用 `TotalSegmentator` 命令行，并将输出的多器官单独 mask 合并为一个多标签分割图。
 
 ---
 

@@ -21,6 +21,7 @@ from .preprocessing import (
     get_orientation_code,
     invert_transpose_flip,
     orient_to_code,
+    prepare_official_compatible_input,
     prepare_for_inference,
     save_intensity_colorbar_preview,
 )
@@ -106,6 +107,9 @@ class SegmentationPipeline:
                 case_transform = case_meta.get(str(input_file), {})
                 transpose = case_transform.get("transpose", [0, 1, 2])
                 flip = case_transform.get("flip", [0, 0, 0])
+                if self.cfg.official_compatible:
+                    transpose = [0, 1, 2]
+                    flip = [0, 0, 0]
                 entry["csv_transpose"] = str(transpose)
                 entry["csv_flip"] = str(flip)
                 run_input_file = self._prepare_case_input_with_transform(input_file, temp_dir, transpose, flip)
@@ -113,7 +117,7 @@ class SegmentationPipeline:
                 seg_path = case_output / "segmentation.nii.gz"
                 label_map, preview_input, is_4d_case, normalized_qc_path = self._run_single_or_4d(run_input_file, temp_dir, seg_path)
                 entry["seg_nonzero_before_clean"] = self._seg_nonzero_voxels(seg_path)
-                if not is_4d_case:
+                if not is_4d_case and not self.cfg.official_compatible:
                     clean_small_components(seg_path)
                 entry["seg_nonzero_after_clean"] = self._seg_nonzero_voxels(seg_path)
                 save_label_map(label_map, case_output / "labels.json")
@@ -190,16 +194,21 @@ class SegmentationPipeline:
         image = sitk.ReadImage(str(input_file))
         original_orientation = get_orientation_code(image)
         if image.GetDimension() < 4:
-            normalized_input = prepare_for_inference(input_file, temp_dir, intensity_norm=self.cfg.intensity_norm)
+            if self.cfg.official_compatible:
+                normalized_input = prepare_official_compatible_input(input_file, temp_dir)
+            else:
+                normalized_input = prepare_for_inference(input_file, temp_dir, intensity_norm=self.cfg.intensity_norm)
             label_map = self.runner.run(normalized_input, seg_path)
             seg_img = sitk.ReadImage(str(seg_path))
             seg_img = orient_to_code(seg_img, original_orientation)
             sitk.WriteImage(seg_img, str(seg_path))
 
-            norm_img = sitk.ReadImage(str(normalized_input))
-            norm_img = orient_to_code(norm_img, original_orientation)
-            norm_out = temp_dir / "normalized_input_original_orientation.nii.gz"
-            sitk.WriteImage(norm_img, str(norm_out))
+            norm_out = None
+            if normalized_input.exists() and normalized_input != input_file:
+                norm_img = sitk.ReadImage(str(normalized_input))
+                norm_img = orient_to_code(norm_img, original_orientation)
+                norm_out = temp_dir / "normalized_input_original_orientation.nii.gz"
+                sitk.WriteImage(norm_img, str(norm_out))
             return label_map, norm_out, False, norm_out
 
         frame_count = image.GetSize()[3]

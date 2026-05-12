@@ -175,6 +175,17 @@ def prepare_for_inference(input_path: Path, work_dir: Path, intensity_norm: str 
     return save_as_nifti(image, nifti_path)
 
 
+def prepare_official_compatible_input(input_path: Path, work_dir: Path) -> Path:
+    # Keep data as close as possible to official TotalSegmentator behavior:
+    # no extra axis/orientation/intensity manipulation in our wrapper.
+    lower = input_path.name.lower()
+    if lower.endswith(".nii") or lower.endswith(".nii.gz"):
+        return input_path
+    image = load_image(input_path)
+    nifti_path = work_dir / (input_path.stem.replace(".nii", "") + ".nii.gz")
+    return save_as_nifti(image, nifti_path)
+
+
 def save_intensity_colorbar_preview(image_path: Path, output_png: Path) -> Path:
     image = sitk.ReadImage(str(image_path))
     arr = sitk.GetArrayFromImage(image).astype(np.float32)

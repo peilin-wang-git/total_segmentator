@@ -28,6 +28,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--no-preview", action="store_true", help="Disable preview PNG generation.")
     parser.add_argument("--keep-temp", action="store_true", help="Keep temporary normalized files.")
     parser.add_argument("--dry-run", action="store_true", help="Only scan and validate files, skip inference.")
+    parser.add_argument("--no-official-compatible", action="store_true", help="Disable official-compatible preprocessing path.")
     return parser
 
 
@@ -62,6 +63,7 @@ def main() -> None:
     cfg.preview = not args.no_preview
     cfg.keep_temp = args.keep_temp
     cfg.dry_run = args.dry_run
+    cfg.official_compatible = not args.no_official_compatible
 
     pipeline = SegmentationPipeline(cfg)
     pipeline.run()
