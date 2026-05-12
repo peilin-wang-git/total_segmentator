@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+import os
 from pathlib import Path
 from typing import Dict, Optional
 
@@ -20,11 +22,21 @@ def _load_class_map(task: str) -> Dict[int, str]:
 
 
 class TotalSegmentatorRunner:
-    def __init__(self, task: str = "total_mr", fast: bool = False, ml: bool = True, roi_subset: Optional[list[str]] = None):
+    def __init__(
+        self,
+        task: str = "total_mr",
+        fast: bool = False,
+        ml: bool = True,
+        roi_subset: Optional[list[str]] = None,
+        device: str = "gpu",
+        gpu_id: int = 0,
+    ):
         self.task = task
         self.fast = fast
         self.ml = ml
         self.roi_subset = roi_subset
+        self.device = device
+        self.gpu_id = gpu_id
 
     def run(self, input_nifti: Path, output_seg_path: Path) -> Dict[int, str]:
         output_seg_path.parent.mkdir(parents=True, exist_ok=True)
@@ -36,15 +48,26 @@ class TotalSegmentatorRunner:
                 "TotalSegmentator is not installed. Install requirements.txt before running inference."
             ) from exc
 
-        totalsegmentator(
-            input=str(input_nifti),
-            output=str(output_seg_path),
-            task=self.task,
-            fast=self.fast,
-            ml=self.ml,
-            roi_subset=self.roi_subset,
-            nr_thr_resamp=1,
-            nr_thr_saving=1,
-            verbose=False,
-        )
+        selected_device = self.device
+        if self.device == "gpu":
+            os.environ["CUDA_VISIBLE_DEVICES"] = str(self.gpu_id)
+
+        kwargs = {
+            "input": str(input_nifti),
+            "output": str(output_seg_path),
+            "task": self.task,
+            "fast": self.fast,
+            "ml": self.ml,
+            "roi_subset": self.roi_subset,
+            "nr_thr_resamp": 1,
+            "nr_thr_saving": 1,
+            "verbose": False,
+        }
+        if "device" in inspect.signature(totalsegmentator).parameters:
+            kwargs["device"] = selected_device
+        elif "fastest" in inspect.signature(totalsegmentator).parameters and self.device == "gpu":
+            # Backward compatibility for some older signatures where explicit device is unavailable.
+            kwargs["fastest"] = False
+
+        totalsegmentator(**kwargs)
         return _load_class_map(self.task)
