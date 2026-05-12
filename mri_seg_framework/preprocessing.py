@@ -17,6 +17,16 @@ def orient_to_lps(image: sitk.Image) -> sitk.Image:
     return orienter.Execute(image)
 
 
+def get_orientation_code(image: sitk.Image) -> str:
+    return sitk.DICOMOrientImageFilter.GetOrientationFromDirectionCosines(image.GetDirection())
+
+
+def orient_to_code(image: sitk.Image, code: str) -> sitk.Image:
+    orienter = sitk.DICOMOrientImageFilter()
+    orienter.SetDesiredCoordinateOrientation(code)
+    return orienter.Execute(image)
+
+
 def save_as_nifti(image: sitk.Image, output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     sitk.WriteImage(image, str(output_path))

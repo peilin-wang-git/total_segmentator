@@ -16,7 +16,7 @@ from .inference import TotalSegmentatorRunner
 from .io_utils import case_id_from_path, load_mri_files_from_csv, scan_mri_files
 from .logging_utils import setup_logger
 from .postprocessing import clean_small_components, save_label_map
-from .preprocessing import prepare_for_inference, save_intensity_colorbar_preview
+from .preprocessing import get_orientation_code, orient_to_code, prepare_for_inference, save_intensity_colorbar_preview
 from .visualization import save_overlay_preview, save_overlay_slices_jpg
 
 
@@ -157,9 +157,19 @@ class SegmentationPipeline:
 
     def _run_single_or_4d(self, input_file: Path, temp_dir: Path, seg_path: Path) -> tuple[Dict[int, str], Optional[Path], bool, Optional[Path]]:
         image = sitk.ReadImage(str(input_file))
+        original_orientation = get_orientation_code(image)
         if image.GetDimension() < 4:
             normalized_input = prepare_for_inference(input_file, temp_dir, intensity_norm=self.cfg.intensity_norm)
-            return self.runner.run(normalized_input, seg_path), normalized_input, False, normalized_input
+            label_map = self.runner.run(normalized_input, seg_path)
+            seg_img = sitk.ReadImage(str(seg_path))
+            seg_img = orient_to_code(seg_img, original_orientation)
+            sitk.WriteImage(seg_img, str(seg_path))
+
+            norm_img = sitk.ReadImage(str(normalized_input))
+            norm_img = orient_to_code(norm_img, original_orientation)
+            norm_out = temp_dir / "normalized_input_original_orientation.nii.gz"
+            sitk.WriteImage(norm_img, str(norm_out))
+            return label_map, norm_out, False, norm_out
 
         frame_count = image.GetSize()[3]
         frame_outputs: List[sitk.Image] = []
