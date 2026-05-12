@@ -221,7 +221,11 @@ def maybe_restore_normalized_to_hu_like(image: sitk.Image) -> sitk.Image:
 def save_intensity_colorbar_preview(image_path: Path, output_png: Path) -> Path:
     image = sitk.ReadImage(str(image_path))
     arr = sitk.GetArrayFromImage(image).astype(np.float32)
-    if arr.ndim >= 3:
+    if arr.ndim == 4:
+        # SITK 4D array order: [t, z, y, x]
+        frame = arr[arr.shape[0] // 2]
+        slice_2d = frame[frame.shape[0] // 2]
+    elif arr.ndim == 3:
         slice_2d = arr[arr.shape[0] // 2]
     else:
         slice_2d = arr
