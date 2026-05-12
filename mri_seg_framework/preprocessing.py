@@ -4,6 +4,7 @@ from pathlib import Path
 
 import numpy as np
 import SimpleITK as sitk
+import matplotlib.pyplot as plt
 
 
 def load_image(path: Path) -> sitk.Image:
@@ -120,3 +121,24 @@ def prepare_for_inference(input_path: Path, work_dir: Path, intensity_norm: str 
     image = normalize_intensity(image, method=intensity_norm)
     nifti_path = work_dir / (input_path.stem.replace(".nii", "") + ".nii.gz")
     return save_as_nifti(image, nifti_path)
+
+
+def save_intensity_colorbar_preview(image_path: Path, output_png: Path) -> Path:
+    image = sitk.ReadImage(str(image_path))
+    arr = sitk.GetArrayFromImage(image).astype(np.float32)
+    if arr.ndim >= 3:
+        slice_2d = arr[arr.shape[0] // 2]
+    else:
+        slice_2d = arr
+
+    output_png.parent.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(6, 5))
+    im = ax.imshow(slice_2d, cmap="gray")
+    ax.set_title("Normalized intensity preview")
+    ax.axis("off")
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Intensity")
+    fig.tight_layout()
+    fig.savefig(output_png, dpi=150)
+    plt.close(fig)
+    return output_png
