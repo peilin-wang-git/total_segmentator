@@ -112,7 +112,6 @@ class SegmentationPipeline:
 
                 seg_path = case_output / "segmentation.nii.gz"
                 label_map, preview_input, is_4d_case, normalized_qc_path = self._run_single_or_4d(run_input_file, temp_dir, seg_path)
-                self._restore_case_output_transform(seg_path, normalized_qc_path, transpose, flip)
                 entry["seg_nonzero_before_clean"] = self._seg_nonzero_voxels(seg_path)
                 if not is_4d_case:
                     clean_small_components(seg_path)
@@ -136,6 +135,9 @@ class SegmentationPipeline:
                 overlay_input = normalized_qc_path if normalized_qc_path is not None else input_file
                 save_overlay_slices_jpg(overlay_input, seg_path, overlay_dir)
                 entry["overlay_slices_dir"] = str(overlay_dir)
+
+                # Restore segmentation to original transform space only at final output stage.
+                self._restore_case_output_transform(seg_path, None, transpose, flip)
 
                 final_seg_path = self._save_seg_to_input_path(input_file, seg_path)
                 entry["segmentation_path"] = str(final_seg_path)
