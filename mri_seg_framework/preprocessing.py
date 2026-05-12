@@ -26,7 +26,7 @@ def normalize_intensity(image: sitk.Image, method: str = "none") -> sitk.Image:
     method = (method or "none").lower()
     if method == "none":
         return image
-    if method not in {"zscore", "percentile_minmax", "zscore_robust"}:
+    if method not in {"zscore", "percentile_minmax", "zscore_robust", "itksnap_window"}:
         raise ValueError(f"Unsupported intensity normalization method: {method}")
 
     arr = sitk.GetArrayFromImage(image).astype(np.float32)
@@ -46,6 +46,23 @@ def normalize_intensity(image: sitk.Image, method: str = "none") -> sitk.Image:
         else:
             arr = arr - lo
         out = sitk.GetImageFromArray(arr)
+        out.CopyInformation(image)
+        return out
+
+    if method == "itksnap_window":
+        # Approximate ITK-SNAP auto window behavior using robust percentile windowing.
+        # Windowed intensities are mapped to [0, 1] for downstream inference stability.
+        p_low = float(np.percentile(arr, 0.5))
+        p_high = float(np.percentile(arr, 99.5))
+        if p_high <= p_low:
+            p_low = float(arr.min())
+            p_high = float(arr.max())
+        if p_high > p_low:
+            arr = np.clip(arr, p_low, p_high)
+            arr = (arr - p_low) / (p_high - p_low)
+        else:
+            arr = arr - p_low
+        out = sitk.GetImageFromArray(arr.astype(np.float32))
         out.CopyInformation(image)
         return out
 

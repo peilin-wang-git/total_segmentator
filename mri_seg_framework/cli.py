@@ -21,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--intensity-norm",
         type=str,
         default="none",
-        choices=["none", "zscore", "percentile_minmax", "zscore_robust"],
+        choices=["none", "zscore", "percentile_minmax", "zscore_robust", "itksnap_window"],
         help="Intensity normalization before inference.",
     )
     parser.add_argument("--fast", action="store_true", help="Enable fast mode if supported by model.")
