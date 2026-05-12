@@ -58,6 +58,7 @@ def save_overlay_slices_jpg(image_path: Path, seg_path: Path, output_dir: Path, 
 
 
 def _save_3d_overlay_series(img_3d: np.ndarray, seg_3d: np.ndarray, output_dir: Path, slice_step: int = 10) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
     num_slices = min(img_3d.shape[0], seg_3d.shape[0])
     unique_labels = np.unique(seg_3d)
     max_label = int(unique_labels.max()) if unique_labels.size > 0 else 0
