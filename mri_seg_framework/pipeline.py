@@ -198,8 +198,8 @@ class SegmentationPipeline:
 
     def _run_single_or_4d(self, input_file: Path, temp_dir: Path, seg_path: Path) -> tuple[Dict[int, str], Optional[Path], bool, Optional[Path]]:
         image = sitk.ReadImage(str(input_file))
-        original_orientation = get_orientation_code(image)
         if image.GetDimension() < 4:
+            original_orientation = get_orientation_code(image)
             if self.cfg.official_compatible:
                 normalized_input = prepare_official_compatible_input(input_file, temp_dir)
             else:

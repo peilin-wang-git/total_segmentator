@@ -12,16 +12,22 @@ def load_image(path: Path) -> sitk.Image:
 
 
 def orient_to_lps(image: sitk.Image) -> sitk.Image:
+    if image.GetDimension() != 3:
+        return image
     orienter = sitk.DICOMOrientImageFilter()
     orienter.SetDesiredCoordinateOrientation("LPS")
     return orienter.Execute(image)
 
 
 def get_orientation_code(image: sitk.Image) -> str:
+    if image.GetDimension() != 3:
+        return "LPS"
     return sitk.DICOMOrientImageFilter.GetOrientationFromDirectionCosines(image.GetDirection())
 
 
 def orient_to_code(image: sitk.Image, code: str) -> sitk.Image:
+    if image.GetDimension() != 3:
+        return image
     orienter = sitk.DICOMOrientImageFilter()
     orienter.SetDesiredCoordinateOrientation(code)
     return orienter.Execute(image)
