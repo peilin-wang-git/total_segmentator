@@ -10,13 +10,25 @@ from .pipeline import SegmentationPipeline
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MRI multi-organ segmentation framework")
     parser.add_argument("--input-dir", type=Path, help="Directory containing MRI images (recursive scan).")
+    parser.add_argument("--input-csv", type=Path, default=None, help="CSV file containing absolute image paths.")
     parser.add_argument("--output-dir", type=Path, help="Directory to save segmentation outputs.")
+    parser.add_argument("--output-suffix", type=str, default="_seg", help="Suffix for output segmentation filename.")
     parser.add_argument("--config", type=Path, default=None, help="Optional YAML config file.")
     parser.add_argument("--task", type=str, default="total_mr", help="TotalSegmentator task, default: total_mr")
+    parser.add_argument("--device", type=str, default="gpu", choices=["gpu", "cpu"], help="Inference device for TotalSegmentator.")
+    parser.add_argument("--gpu-id", type=int, default=0, help="GPU index to use when --device gpu.")
+    parser.add_argument(
+        "--intensity-norm",
+        type=str,
+        default="none",
+        choices=["none", "zscore", "percentile_minmax", "zscore_robust", "itksnap_window"],
+        help="Intensity normalization before inference.",
+    )
     parser.add_argument("--fast", action="store_true", help="Enable fast mode if supported by model.")
     parser.add_argument("--no-preview", action="store_true", help="Disable preview PNG generation.")
     parser.add_argument("--keep-temp", action="store_true", help="Keep temporary normalized files.")
     parser.add_argument("--dry-run", action="store_true", help="Only scan and validate files, skip inference.")
+    parser.add_argument("--no-official-compatible", action="store_true", help="Disable official-compatible preprocessing path.")
     return parser
 
 
@@ -27,15 +39,31 @@ def main() -> None:
     if args.config:
         cfg = SegmentationConfig.from_yaml(args.config, input_dir=args.input_dir, output_dir=args.output_dir)
     else:
-        if args.input_dir is None or args.output_dir is None:
-            parser.error("--input-dir and --output-dir are required when --config is not provided.")
-        cfg = SegmentationConfig(input_dir=args.input_dir, output_dir=args.output_dir)
+        if args.input_dir is None and args.input_csv is None:
+            parser.error("Either --input-dir or --input-csv must be provided when --config is not provided.")
+
+        if args.output_dir is None:
+            if args.input_csv is not None:
+                default_output_dir = args.input_csv.parent / "seg_run_outputs"
+            else:
+                parser.error("--output-dir is required when --config is not provided and --input-csv is not used.")
+        else:
+            default_output_dir = args.output_dir
+
+        cfg = SegmentationConfig(input_dir=args.input_dir or Path("."), output_dir=default_output_dir)
+
+    cfg.input_csv = args.input_csv
+    cfg.output_suffix = args.output_suffix
 
     cfg.task = args.task
+    cfg.device = args.device
+    cfg.gpu_id = args.gpu_id
+    cfg.intensity_norm = args.intensity_norm
     cfg.fast = args.fast
     cfg.preview = not args.no_preview
     cfg.keep_temp = args.keep_temp
     cfg.dry_run = args.dry_run
+    cfg.official_compatible = not args.no_official_compatible
 
     pipeline = SegmentationPipeline(cfg)
     pipeline.run()
