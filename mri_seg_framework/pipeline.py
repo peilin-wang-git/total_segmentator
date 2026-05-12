@@ -13,10 +13,17 @@ import numpy as np
 
 from .config import SegmentationConfig
 from .inference import TotalSegmentatorRunner
-from .io_utils import case_id_from_path, load_mri_files_from_csv, scan_mri_files
+from .io_utils import case_id_from_path, load_cases_from_csv, scan_mri_files
 from .logging_utils import setup_logger
 from .postprocessing import clean_small_components, save_label_map
-from .preprocessing import get_orientation_code, orient_to_code, prepare_for_inference, save_intensity_colorbar_preview
+from .preprocessing import (
+    apply_transpose_flip,
+    get_orientation_code,
+    invert_transpose_flip,
+    orient_to_code,
+    prepare_for_inference,
+    save_intensity_colorbar_preview,
+)
 from .visualization import save_overlay_preview, save_overlay_slices_jpg
 
 
@@ -38,11 +45,14 @@ class SegmentationPipeline:
     def run(self) -> Dict[str, Any]:
         self.logger.info("Starting MRI segmentation with config: %s", asdict(self.cfg))
         if self.cfg.input_csv:
-            files = load_mri_files_from_csv(self.cfg.input_csv, self.cfg.supported_extensions)
+            csv_cases = load_cases_from_csv(self.cfg.input_csv, self.cfg.supported_extensions)
+            files = [x["path"] for x in csv_cases]
+            case_meta = {str(x["path"]): x for x in csv_cases}
             case_root = Path("/")
             self.logger.info("Using CSV input list: %s", self.cfg.input_csv)
         else:
             files = scan_mri_files(self.cfg.input_dir, self.cfg.supported_extensions)
+            case_meta = {}
             case_root = self.cfg.input_dir
         self.logger.info("Discovered %d candidate MRI files.", len(files))
 
@@ -82,8 +92,14 @@ class SegmentationPipeline:
                 input_stats = self._image_intensity_stats(input_file)
                 entry.update(input_stats)
 
+                case_transform = case_meta.get(str(input_file), {})
+                transpose = case_transform.get("transpose", [0, 1, 2])
+                flip = case_transform.get("flip", [0, 0, 0])
+                run_input_file = self._prepare_case_input_with_transform(input_file, temp_dir, transpose, flip)
+
                 seg_path = case_output / "segmentation.nii.gz"
-                label_map, preview_input, is_4d_case, normalized_qc_path = self._run_single_or_4d(input_file, temp_dir, seg_path)
+                label_map, preview_input, is_4d_case, normalized_qc_path = self._run_single_or_4d(run_input_file, temp_dir, seg_path)
+                self._restore_case_output_transform(seg_path, normalized_qc_path, transpose, flip)
                 entry["seg_nonzero_before_clean"] = self._seg_nonzero_voxels(seg_path)
                 if not is_4d_case:
                     clean_small_components(seg_path)
@@ -217,3 +233,27 @@ class SegmentationPipeline:
             "input_p50": float(np.percentile(flat, 50)),
             "input_p99": float(np.percentile(flat, 99)),
         }
+
+    def _prepare_case_input_with_transform(self, input_file: Path, temp_dir: Path, transpose: list[int], flip: list[int]) -> Path:
+        if transpose == [0, 1, 2] and flip == [0, 0, 0]:
+            return input_file
+        image = sitk.ReadImage(str(input_file))
+        if image.GetDimension() != 3:
+            return input_file
+        transformed = apply_transpose_flip(image, transpose, flip)
+        transformed_path = temp_dir / f"{input_file.stem}_csv_transformed.nii.gz"
+        sitk.WriteImage(transformed, str(transformed_path))
+        return transformed_path
+
+    def _restore_case_output_transform(self, seg_path: Path, normalized_qc_path: Optional[Path], transpose: list[int], flip: list[int]) -> None:
+        if transpose == [0, 1, 2] and flip == [0, 0, 0]:
+            return
+        seg = sitk.ReadImage(str(seg_path))
+        if seg.GetDimension() == 3:
+            seg = invert_transpose_flip(seg, transpose, flip)
+            sitk.WriteImage(seg, str(seg_path))
+        if normalized_qc_path is not None and normalized_qc_path.exists():
+            qc = sitk.ReadImage(str(normalized_qc_path))
+            if qc.GetDimension() == 3:
+                qc = invert_transpose_flip(qc, transpose, flip)
+                sitk.WriteImage(qc, str(normalized_qc_path))

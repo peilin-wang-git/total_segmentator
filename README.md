@@ -137,9 +137,10 @@ python -m mri_seg_framework.cli \
 当数据分散在不同目录时，可通过 CSV 第一列提供图像**绝对路径**：
 
 ```csv
-image_path
-/data/site_a/case001.nii.gz
-/data/site_b/patient_12/scan.mha
+image path,transpose,flip
+/data/site_a/case001.nii.gz,"[0,1,2]","[0,0,0]"
+/data/site_b/patient_12/scan.mha,"[0,2,1]","[0,1,0]"
+/data/site_c/case003.nii.gz,"0, 2, 1","0, 0, 0"
 ```
 
 运行示例：
@@ -156,6 +157,12 @@ python -m mri_seg_framework.cli \
 说明：
 
 - CSV 默认读取第一列作为输入路径；
+- 推荐列名为 `image path`、`transpose`、`flip`：
+  - `transpose` 例如 `[0,2,1]` 表示先对图像做 `permute([0,2,1])`；
+    也支持写成 `"0, 2, 1"`；
+  - `flip` 例如 `[0,1,0]` 表示在 permute 后的第 1 个维度翻转；
+    也支持写成 `"0, 1, 0"`；
+  - 执行顺序：先 `transpose`，再 `flip`；
 - 路径必须是绝对路径；
 - 仅处理支持的医学影像后缀（`.nii`、`.nii.gz`、`.mha`、`.nrrd`）。
 - 可通过 `--output-suffix` 指定输出分割文件后缀（默认 `_seg`，例如 `_totalseg`）。

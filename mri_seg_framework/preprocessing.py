@@ -27,6 +27,34 @@ def orient_to_code(image: sitk.Image, code: str) -> sitk.Image:
     return orienter.Execute(image)
 
 
+def apply_transpose_flip(image: sitk.Image, transpose: list[int], flip: list[int]) -> sitk.Image:
+    permuter = sitk.PermuteAxesImageFilter()
+    permuter.SetOrder(transpose)
+    out = permuter.Execute(image)
+
+    flip_bools = [bool(x) for x in flip]
+    flipper = sitk.FlipImageFilter()
+    flipper.SetFlipAxes(flip_bools)
+    out = flipper.Execute(out)
+    return out
+
+
+def invert_transpose_flip(image: sitk.Image, transpose: list[int], flip: list[int]) -> sitk.Image:
+    # Reverse order: undo flip first, then inverse permutation.
+    flip_bools = [bool(x) for x in flip]
+    flipper = sitk.FlipImageFilter()
+    flipper.SetFlipAxes(flip_bools)
+    out = flipper.Execute(image)
+
+    inverse = [0, 0, 0]
+    for i, idx in enumerate(transpose):
+        inverse[idx] = i
+    permuter = sitk.PermuteAxesImageFilter()
+    permuter.SetOrder(inverse)
+    out = permuter.Execute(out)
+    return out
+
+
 def save_as_nifti(image: sitk.Image, output_path: Path) -> Path:
     output_path.parent.mkdir(parents=True, exist_ok=True)
     sitk.WriteImage(image, str(output_path))
