@@ -191,11 +191,12 @@ def maybe_restore_normalized_to_hu_like(image: sitk.Image) -> sitk.Image:
         return image
 
     p1, p99 = np.percentile(arr, [1, 99])
-    std = float(arr.std())
 
-    # Heuristic: if values look already normalized (small range around 0), remap to [0, 1000].
-    looks_normalized = (-10.0 <= p1 <= 10.0) and (-10.0 <= p99 <= 10.0) and (std < 8.0)
-    if not looks_normalized:
+    # Heuristic: if values are approximately in [0, 1], remap to [0, 1000].
+    # Use percentile-based tolerance to be robust to a few outliers.
+    tol = 0.05
+    looks_zero_one_normalized = (float(p1) >= -tol) and (float(p99) <= 1.0 + tol)
+    if not looks_zero_one_normalized:
         return image
 
     lo = float(arr.min())

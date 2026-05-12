@@ -124,8 +124,14 @@ class SegmentationPipeline:
 
                 if normalized_qc_path is not None and normalized_qc_path.exists():
                     qc_nifti = case_output / "normalized_input.nii.gz"
-                    sitk.WriteImage(sitk.ReadImage(str(normalized_qc_path)), str(qc_nifti))
+                    qc_img = sitk.ReadImage(str(normalized_qc_path))
+                    sitk.WriteImage(qc_img, str(qc_nifti))
                     entry["normalized_image_path"] = str(qc_nifti)
+
+                    if self._looks_like_linear_0_1000(qc_img):
+                        mapped_path = case_output / "linear_mapped_0_1000.nii.gz"
+                        sitk.WriteImage(qc_img, str(mapped_path))
+
                     colorbar_path = case_output / "normalized_intensity_colorbar.png"
                     save_intensity_colorbar_preview(qc_nifti, colorbar_path)
                     entry["intensity_colorbar_path"] = str(colorbar_path)
@@ -236,6 +242,13 @@ class SegmentationPipeline:
         norm_qc_path = temp_dir / "normalized_4d_input.nii.gz"
         sitk.WriteImage(norm_4d, str(norm_qc_path))
         return label_map, None, True, norm_qc_path
+
+    def _looks_like_linear_0_1000(self, image: sitk.Image) -> bool:
+        arr = sitk.GetArrayFromImage(image).astype(np.float32)
+        if arr.size == 0:
+            return False
+        p1, p99 = np.percentile(arr, [1, 99])
+        return (0.0 <= float(p1) <= 1000.0) and (0.0 <= float(p99) <= 1000.0)
 
     def _seg_nonzero_voxels(self, seg_path: Path) -> int:
         arr = sitk.GetArrayFromImage(sitk.ReadImage(str(seg_path)))
