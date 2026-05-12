@@ -80,11 +80,6 @@ def load_cases_from_csv(csv_path: Path, extensions: Iterable[str] = SUPPORTED_EX
             transpose = _parse_triplet(row.get("transpose", "[0,1,2]"), default=[0, 1, 2])
             flip = _parse_triplet(row.get("flip", "[0,0,0]"), default=[0, 0, 0])
             cases.append({"path": p, "transpose": transpose, "flip": flip})
-    print(f"[CSV] Loaded {len(cases)} cases from: {csv_path}")
-    for i, case in enumerate(cases, start=1):
-        print(
-            f"[CSV][{i:03d}] image path={case['path']} | transpose={case['transpose']} | flip={case['flip']}"
-        )
     return cases
 
 

@@ -50,6 +50,15 @@ class SegmentationPipeline:
             case_meta = {str(x["path"]): x for x in csv_cases}
             case_root = Path("/")
             self.logger.info("Using CSV input list: %s", self.cfg.input_csv)
+            self.logger.info("[CSV] Loaded %d cases from: %s", len(csv_cases), self.cfg.input_csv)
+            for i, case in enumerate(csv_cases, start=1):
+                self.logger.info(
+                    "[CSV][%03d] image path=%s | transpose=%s | flip=%s",
+                    i,
+                    case["path"],
+                    case["transpose"],
+                    case["flip"],
+                )
         else:
             files = scan_mri_files(self.cfg.input_dir, self.cfg.supported_extensions)
             case_meta = {}
@@ -78,6 +87,8 @@ class SegmentationPipeline:
                 "normalized_image_path": "",
                 "intensity_colorbar_path": "",
                 "overlay_slices_dir": "",
+                "csv_transpose": "",
+                "csv_flip": "",
             }
 
             try:
@@ -95,6 +106,8 @@ class SegmentationPipeline:
                 case_transform = case_meta.get(str(input_file), {})
                 transpose = case_transform.get("transpose", [0, 1, 2])
                 flip = case_transform.get("flip", [0, 0, 0])
+                entry["csv_transpose"] = str(transpose)
+                entry["csv_flip"] = str(flip)
                 run_input_file = self._prepare_case_input_with_transform(input_file, temp_dir, transpose, flip)
 
                 seg_path = case_output / "segmentation.nii.gz"
@@ -238,9 +251,17 @@ class SegmentationPipeline:
         if transpose == [0, 1, 2] and flip == [0, 0, 0]:
             return input_file
         image = sitk.ReadImage(str(input_file))
-        if image.GetDimension() != 3:
+        if image.GetDimension() == 3:
+            transformed = apply_transpose_flip(image, transpose, flip)
+        elif image.GetDimension() == 4:
+            transformed_frames: List[sitk.Image] = []
+            frame_count = image.GetSize()[3]
+            for i in range(frame_count):
+                frame = image[:, :, :, i]
+                transformed_frames.append(apply_transpose_flip(frame, transpose, flip))
+            transformed = sitk.JoinSeries(transformed_frames)
+        else:
             return input_file
-        transformed = apply_transpose_flip(image, transpose, flip)
         transformed_path = temp_dir / f"{input_file.stem}_csv_transformed.nii.gz"
         sitk.WriteImage(transformed, str(transformed_path))
         return transformed_path
@@ -252,8 +273,24 @@ class SegmentationPipeline:
         if seg.GetDimension() == 3:
             seg = invert_transpose_flip(seg, transpose, flip)
             sitk.WriteImage(seg, str(seg_path))
+        elif seg.GetDimension() == 4:
+            restored_frames: List[sitk.Image] = []
+            frame_count = seg.GetSize()[3]
+            for i in range(frame_count):
+                frame = seg[:, :, :, i]
+                restored_frames.append(invert_transpose_flip(frame, transpose, flip))
+            seg_restored = sitk.JoinSeries(restored_frames)
+            sitk.WriteImage(seg_restored, str(seg_path))
         if normalized_qc_path is not None and normalized_qc_path.exists():
             qc = sitk.ReadImage(str(normalized_qc_path))
             if qc.GetDimension() == 3:
                 qc = invert_transpose_flip(qc, transpose, flip)
                 sitk.WriteImage(qc, str(normalized_qc_path))
+            elif qc.GetDimension() == 4:
+                restored_qc_frames: List[sitk.Image] = []
+                frame_count = qc.GetSize()[3]
+                for i in range(frame_count):
+                    frame = qc[:, :, :, i]
+                    restored_qc_frames.append(invert_transpose_flip(frame, transpose, flip))
+                qc_restored = sitk.JoinSeries(restored_qc_frames)
+                sitk.WriteImage(qc_restored, str(normalized_qc_path))

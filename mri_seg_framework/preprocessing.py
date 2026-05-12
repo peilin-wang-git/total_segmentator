@@ -28,30 +28,44 @@ def orient_to_code(image: sitk.Image, code: str) -> sitk.Image:
 
 
 def apply_transpose_flip(image: sitk.Image, transpose: list[int], flip: list[int]) -> sitk.Image:
-    permuter = sitk.PermuteAxesImageFilter()
-    permuter.SetOrder(transpose)
-    out = permuter.Execute(image)
+    arr = sitk.GetArrayFromImage(image)
+    # SITK array order is [z, y, x], map requested [0,1,2] (x,y,z) to array axes.
+    to_array_axis = {0: 2, 1: 1, 2: 0}
+    transpose_arr = [to_array_axis[i] for i in transpose[::-1]]
+    arr = np.transpose(arr, axes=transpose_arr)
 
-    flip_bools = [bool(x) for x in flip]
-    flipper = sitk.FlipImageFilter()
-    flipper.SetFlipAxes(flip_bools)
-    out = flipper.Execute(out)
+    for axis_xyz, do_flip in enumerate(flip):
+        if bool(do_flip):
+            arr_axis = to_array_axis[axis_xyz]
+            arr = np.flip(arr, axis=arr_axis)
+
+    out = sitk.GetImageFromArray(arr)
+    out.SetOrigin(image.GetOrigin())
+    out.SetSpacing(image.GetSpacing())
+    out.SetDirection(image.GetDirection())
     return out
 
 
 def invert_transpose_flip(image: sitk.Image, transpose: list[int], flip: list[int]) -> sitk.Image:
-    # Reverse order: undo flip first, then inverse permutation.
-    flip_bools = [bool(x) for x in flip]
-    flipper = sitk.FlipImageFilter()
-    flipper.SetFlipAxes(flip_bools)
-    out = flipper.Execute(image)
+    arr = sitk.GetArrayFromImage(image)
+    to_array_axis = {0: 2, 1: 1, 2: 0}
+
+    # Undo flip first
+    for axis_xyz, do_flip in enumerate(flip):
+        if bool(do_flip):
+            arr_axis = to_array_axis[axis_xyz]
+            arr = np.flip(arr, axis=arr_axis)
 
     inverse = [0, 0, 0]
     for i, idx in enumerate(transpose):
         inverse[idx] = i
-    permuter = sitk.PermuteAxesImageFilter()
-    permuter.SetOrder(inverse)
-    out = permuter.Execute(out)
+    inverse_arr = [to_array_axis[i] for i in inverse[::-1]]
+    arr = np.transpose(arr, axes=inverse_arr)
+
+    out = sitk.GetImageFromArray(arr)
+    out.SetOrigin(image.GetOrigin())
+    out.SetSpacing(image.GetSpacing())
+    out.SetDirection(image.GetDirection())
     return out
 
 
