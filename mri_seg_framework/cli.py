@@ -15,6 +15,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-suffix", type=str, default="_seg", help="Suffix for output segmentation filename.")
     parser.add_argument("--config", type=Path, default=None, help="Optional YAML config file.")
     parser.add_argument("--task", type=str, default="total_mr", help="TotalSegmentator task, default: total_mr")
+    parser.add_argument("--device", type=str, default="gpu", choices=["gpu", "cpu"], help="Inference device for TotalSegmentator.")
+    parser.add_argument("--gpu-id", type=int, default=0, help="GPU index to use when --device gpu.")
     parser.add_argument("--fast", action="store_true", help="Enable fast mode if supported by model.")
     parser.add_argument("--no-preview", action="store_true", help="Disable preview PNG generation.")
     parser.add_argument("--keep-temp", action="store_true", help="Keep temporary normalized files.")
@@ -46,6 +48,8 @@ def main() -> None:
     cfg.output_suffix = args.output_suffix
 
     cfg.task = args.task
+    cfg.device = args.device
+    cfg.gpu_id = args.gpu_id
     cfg.fast = args.fast
     cfg.preview = not args.no_preview
     cfg.keep_temp = args.keep_temp

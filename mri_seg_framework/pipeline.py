@@ -29,6 +29,8 @@ class SegmentationPipeline:
             fast=self.cfg.fast,
             ml=self.cfg.ml,
             roi_subset=self.cfg.roi_subset,
+            device=self.cfg.device,
+            gpu_id=self.cfg.gpu_id,
         )
         self.tmp_root = self.cfg.output_dir / "tmp"
 
