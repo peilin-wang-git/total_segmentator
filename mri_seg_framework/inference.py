@@ -54,10 +54,23 @@ class TotalSegmentatorRunner:
         masks_dir.mkdir(parents=True, exist_ok=True)
         try:
             self._run_totalsegmentator_cli(input_nifti, masks_dir)
+            single_file_output = self._detect_single_file_output(masks_dir)
+            if single_file_output is not None:
+                seg_img = sitk.ReadImage(str(single_file_output))
+                sitk.WriteImage(seg_img, str(output_seg_path))
+                return _load_class_map(self.task)
             label_map = self._merge_masks_to_multilabel(masks_dir, output_seg_path)
             return label_map
         finally:
             shutil.rmtree(masks_dir, ignore_errors=True)
+            for p in [
+                masks_dir.with_suffix(".nii.gz"),
+                masks_dir.with_suffix(".nii"),
+                masks_dir.parent / f"{masks_dir.name}.nii.gz",
+                masks_dir.parent / f"{masks_dir.name}.nii",
+            ]:
+                if p.exists() and p.is_file():
+                    p.unlink(missing_ok=True)
 
     def _run_totalsegmentator_cli(self, input_nifti: Path, masks_dir: Path) -> None:
         cmd = [
@@ -80,6 +93,19 @@ class TotalSegmentatorRunner:
             cmd.append("cpu")
 
         subprocess.run(cmd, check=True)
+
+    def _detect_single_file_output(self, masks_dir: Path) -> Optional[Path]:
+        candidates = [
+            masks_dir,
+            masks_dir.with_suffix(".nii.gz"),
+            masks_dir.with_suffix(".nii"),
+            masks_dir.parent / f"{masks_dir.name}.nii.gz",
+            masks_dir.parent / f"{masks_dir.name}.nii",
+        ]
+        for p in candidates:
+            if p.exists() and p.is_file():
+                return p
+        return None
 
     def _merge_masks_to_multilabel(self, masks_dir: Path, output_seg_path: Path) -> Dict[int, str]:
         class_map = _load_class_map(self.task)
