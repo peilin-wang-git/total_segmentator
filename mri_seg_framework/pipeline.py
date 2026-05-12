@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 import SimpleITK as sitk
+import numpy as np
 
 from .config import SegmentationConfig
 from .inference import TotalSegmentatorRunner
@@ -58,6 +59,12 @@ class SegmentationPipeline:
                 "message": "",
                 "segmentation_path": "",
                 "preview_path": "",
+                "input_nonzero_ratio": None,
+                "input_p01": None,
+                "input_p50": None,
+                "input_p99": None,
+                "seg_nonzero_before_clean": None,
+                "seg_nonzero_after_clean": None,
             }
 
             try:
@@ -69,10 +76,15 @@ class SegmentationPipeline:
 
                 temp_dir = self.tmp_root / case_id
                 temp_dir.mkdir(parents=True, exist_ok=True)
+                input_stats = self._image_intensity_stats(input_file)
+                entry.update(input_stats)
+
                 seg_path = case_output / "segmentation.nii.gz"
                 label_map, preview_input, is_4d_case = self._run_single_or_4d(input_file, temp_dir, seg_path)
+                entry["seg_nonzero_before_clean"] = self._seg_nonzero_voxels(seg_path)
                 if not is_4d_case:
                     clean_small_components(seg_path)
+                entry["seg_nonzero_after_clean"] = self._seg_nonzero_voxels(seg_path)
                 save_label_map(label_map, case_output / "labels.json")
 
                 if self.cfg.preview and preview_input is not None:
@@ -152,3 +164,24 @@ class SegmentationPipeline:
         seg_4d.CopyInformation(image)
         sitk.WriteImage(seg_4d, str(seg_path))
         return label_map, None, True
+
+    def _seg_nonzero_voxels(self, seg_path: Path) -> int:
+        arr = sitk.GetArrayFromImage(sitk.ReadImage(str(seg_path)))
+        return int(np.count_nonzero(arr))
+
+    def _image_intensity_stats(self, image_path: Path) -> Dict[str, float]:
+        arr = sitk.GetArrayFromImage(sitk.ReadImage(str(image_path))).astype(np.float32)
+        flat = arr.reshape(-1)
+        if flat.size == 0:
+            return {
+                "input_nonzero_ratio": 0.0,
+                "input_p01": 0.0,
+                "input_p50": 0.0,
+                "input_p99": 0.0,
+            }
+        return {
+            "input_nonzero_ratio": float(np.count_nonzero(flat) / flat.size),
+            "input_p01": float(np.percentile(flat, 1)),
+            "input_p50": float(np.percentile(flat, 50)),
+            "input_p99": float(np.percentile(flat, 99)),
+        }
