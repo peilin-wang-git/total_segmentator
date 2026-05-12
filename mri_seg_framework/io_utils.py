@@ -6,6 +6,8 @@ from typing import Dict, Iterable, List
 
 import pandas as pd
 
+import pandas as pd
+
 
 SUPPORTED_EXTENSIONS = (".nii", ".nii.gz", ".mha", ".nrrd")
 
