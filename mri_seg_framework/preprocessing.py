@@ -169,6 +169,7 @@ def normalize_intensity(image: sitk.Image, method: str = "none") -> sitk.Image:
 
 def prepare_for_inference(input_path: Path, work_dir: Path, intensity_norm: str = "none") -> Path:
     image = load_image(input_path)
+    image = maybe_restore_normalized_to_hu_like(image)
     image = orient_to_lps(image)
     image = normalize_intensity(image, method=intensity_norm)
     nifti_path = work_dir / (input_path.stem.replace(".nii", "") + ".nii.gz")
@@ -178,12 +179,36 @@ def prepare_for_inference(input_path: Path, work_dir: Path, intensity_norm: str 
 def prepare_official_compatible_input(input_path: Path, work_dir: Path) -> Path:
     # Keep data as close as possible to official TotalSegmentator behavior:
     # no extra axis/orientation/intensity manipulation in our wrapper.
-    lower = input_path.name.lower()
-    if lower.endswith(".nii") or lower.endswith(".nii.gz"):
-        return input_path
     image = load_image(input_path)
+    image = maybe_restore_normalized_to_hu_like(image)
     nifti_path = work_dir / (input_path.stem.replace(".nii", "") + ".nii.gz")
     return save_as_nifti(image, nifti_path)
+
+
+def maybe_restore_normalized_to_hu_like(image: sitk.Image) -> sitk.Image:
+    arr = sitk.GetArrayFromImage(image).astype(np.float32)
+    if arr.size == 0:
+        return image
+
+    p1, p99 = np.percentile(arr, [1, 99])
+    std = float(arr.std())
+
+    # Heuristic: if values look already normalized (small range around 0), remap to [0, 1000].
+    looks_normalized = (-10.0 <= p1 <= 10.0) and (-10.0 <= p99 <= 10.0) and (std < 8.0)
+    if not looks_normalized:
+        return image
+
+    lo = float(arr.min())
+    hi = float(arr.max())
+    if hi <= lo:
+        restored = np.zeros_like(arr, dtype=np.float32)
+    else:
+        restored = (arr - lo) / (hi - lo)
+        restored = restored * 1000.0
+
+    out = sitk.GetImageFromArray(restored.astype(np.float32))
+    out.CopyInformation(image)
+    return out
 
 
 def save_intensity_colorbar_preview(image_path: Path, output_png: Path) -> Path:

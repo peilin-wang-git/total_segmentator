@@ -178,6 +178,7 @@ python -m mri_seg_framework.cli \
 - 推理前会先将图像方向标准化到 LPS 以稳定推理；case 完成后会将分割结果与标准化质检图像重新变换回原始方向。
 - 默认启用官方兼容路径（`official_compatible`）：尽量贴近 TotalSegmentator 官方流程，避免额外归一化/后处理。可通过 `--no-official-compatible` 关闭。
 - 推理调用会直接使用 `TotalSegmentator` 命令行，并将输出的多器官单独 mask 合并为一个多标签分割图。
+- 若检测到输入图像像素已归一化（小范围分布），会自动线性恢复到 `[0,1000]` 并保存临时 NIfTI 后再送入分割。
 
 ---
 
@@ -201,7 +202,7 @@ python -m mri_seg_framework.cli \
 - `<case_id>/preview_overlay.png`: 叠加预览图（可选）
 - `<case_id>/normalized_input.nii.gz`: 标准化后的推理输入图像（用于质检）
 - `<case_id>/normalized_intensity_colorbar.png`: 标准化图像切片 + intensity colorbar（用于检查对比度）
-- `<case_id>/overlay_slices_jpg/`: 每个 slice 的分割叠加 JPG 序列（3D 或 4D 分 frame 存储）
+- `<case_id>/overlay_slices_jpg/`: 每隔 10 个 slice 导出一张分割叠加 JPG（3D 或 4D 分 frame 存储），同一标签使用统一颜色映射。
 
 - 使用 `--input-dir` 时：
   - `output_dir` 下生成 `run.log`、`summary.json/csv`、以及每个 `<case_id>/` 子目录输出。
