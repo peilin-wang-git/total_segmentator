@@ -167,7 +167,7 @@ python -m mri_seg_framework.cli \
   - `zscore`：均值方差标准化；
   - `percentile_minmax`：分位数裁剪后映射到 [0,1]；
   - `zscore_robust`：基于 median/MAD 的鲁棒标准化；
-  - `itksnap_window`：近似 ITK-SNAP 自动窗宽窗位后映射到 [0,1]。
+  - `itksnap_window`：按 case 自适应窗宽窗位（基于 Otsu 前景 + 对比度统计）后映射到 [0,1]。
 
 ---
 

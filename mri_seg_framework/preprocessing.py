@@ -50,18 +50,43 @@ def normalize_intensity(image: sitk.Image, method: str = "none") -> sitk.Image:
         return out
 
     if method == "itksnap_window":
-        # Approximate ITK-SNAP auto window behavior using robust percentile windowing.
-        # Windowed intensities are mapped to [0, 1] for downstream inference stability.
-        p_low = float(np.percentile(arr, 0.5))
-        p_high = float(np.percentile(arr, 99.5))
-        if p_high <= p_low:
-            p_low = float(arr.min())
-            p_high = float(arr.max())
-        if p_high > p_low:
-            arr = np.clip(arr, p_low, p_high)
-            arr = (arr - p_low) / (p_high - p_low)
+        # Case-by-case adaptive windowing using image contrast statistics.
+        # 1) robust foreground estimation via Otsu on non-zero voxels
+        # 2) derive center from foreground median
+        # 3) adapt width from foreground std + robust global range
+        nonzero = arr[arr != 0]
+        if nonzero.size > 32:
+            try:
+                otsu = sitk.OtsuThresholdImageFilter()
+                otsu.SetInsideValue(0)
+                otsu.SetOutsideValue(1)
+                mask_img = otsu.Execute(sitk.GetImageFromArray(arr.astype(np.float32)))
+                mask = sitk.GetArrayFromImage(mask_img).astype(bool)
+                region = arr[mask] if np.any(mask) else nonzero
+            except Exception:
+                region = nonzero
         else:
-            arr = arr - p_low
+            region = arr.reshape(-1)
+
+        center = float(np.median(region))
+        fg_std = float(np.std(region))
+        rg_low = float(np.percentile(arr, 0.5))
+        rg_high = float(np.percentile(arr, 99.5))
+        robust_range = max(rg_high - rg_low, 1e-6)
+
+        contrast_ratio = fg_std / robust_range
+        if contrast_ratio < 0.08:
+            width = 1.4 * robust_range
+        elif contrast_ratio < 0.16:
+            width = 1.8 * robust_range
+        else:
+            width = 2.2 * robust_range
+        width = max(width, 6.0 * fg_std, 1e-6)
+
+        p_low = center - 0.5 * width
+        p_high = center + 0.5 * width
+        arr = np.clip(arr, p_low, p_high)
+        arr = (arr - p_low) / max(p_high - p_low, 1e-6)
         out = sitk.GetImageFromArray(arr.astype(np.float32))
         out.CopyInformation(image)
         return out
