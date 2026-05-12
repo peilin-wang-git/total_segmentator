@@ -14,6 +14,8 @@ SUPPORTED_EXTENSIONS = [".nii", ".nii.gz", ".mha", ".nrrd"]
 class SegmentationConfig:
     input_dir: Path
     output_dir: Path
+    input_csv: Optional[Path] = None
+    output_suffix: str = "_seg"
     task: str = "total_mr"
     roi_subset: Optional[List[str]] = None
     fast: bool = False
@@ -39,4 +41,6 @@ class SegmentationConfig:
 
         raw["input_dir"] = Path(raw["input_dir"])
         raw["output_dir"] = Path(raw["output_dir"])
+        if raw.get("input_csv") is not None:
+            raw["input_csv"] = Path(raw["input_csv"])
         return cls(**raw)

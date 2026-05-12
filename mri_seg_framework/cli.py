@@ -10,7 +10,9 @@ from .pipeline import SegmentationPipeline
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="MRI multi-organ segmentation framework")
     parser.add_argument("--input-dir", type=Path, help="Directory containing MRI images (recursive scan).")
+    parser.add_argument("--input-csv", type=Path, default=None, help="CSV file containing absolute image paths.")
     parser.add_argument("--output-dir", type=Path, help="Directory to save segmentation outputs.")
+    parser.add_argument("--output-suffix", type=str, default="_seg", help="Suffix for output segmentation filename.")
     parser.add_argument("--config", type=Path, default=None, help="Optional YAML config file.")
     parser.add_argument("--task", type=str, default="total_mr", help="TotalSegmentator task, default: total_mr")
     parser.add_argument("--fast", action="store_true", help="Enable fast mode if supported by model.")
@@ -27,9 +29,21 @@ def main() -> None:
     if args.config:
         cfg = SegmentationConfig.from_yaml(args.config, input_dir=args.input_dir, output_dir=args.output_dir)
     else:
-        if args.input_dir is None or args.output_dir is None:
-            parser.error("--input-dir and --output-dir are required when --config is not provided.")
-        cfg = SegmentationConfig(input_dir=args.input_dir, output_dir=args.output_dir)
+        if args.input_dir is None and args.input_csv is None:
+            parser.error("Either --input-dir or --input-csv must be provided when --config is not provided.")
+
+        if args.output_dir is None:
+            if args.input_csv is not None:
+                default_output_dir = args.input_csv.parent / "seg_run_outputs"
+            else:
+                parser.error("--output-dir is required when --config is not provided and --input-csv is not used.")
+        else:
+            default_output_dir = args.output_dir
+
+        cfg = SegmentationConfig(input_dir=args.input_dir or Path("."), output_dir=default_output_dir)
+
+    cfg.input_csv = args.input_csv
+    cfg.output_suffix = args.output_suffix
 
     cfg.task = args.task
     cfg.fast = args.fast
