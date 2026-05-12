@@ -162,7 +162,12 @@ python -m mri_seg_framework.cli \
 - 使用 `--input-csv` 时，`--output-dir` 可省略；省略后默认使用 `CSV所在目录/seg_run_outputs` 保存 `run.log`、`summary.json`、`summary.csv`、临时文件等运行产物。
 - 可通过 `--device` 选择推理设备（`gpu` 或 `cpu`，默认 `gpu`）。
 - 当 `--device gpu` 时，可通过 `--gpu-id` 指定使用第几块 GPU（默认 `0`）。
-- 可通过 `--intensity-norm` 指定推理前强度标准化方式：`none`（默认）或 `zscore`。
+- 可通过 `--intensity-norm` 指定推理前强度标准化方式：
+  - `none`（默认）：不做标准化；
+  - `zscore`：均值方差标准化；
+  - `percentile_minmax`：分位数裁剪后映射到 [0,1]；
+  - `zscore_robust`：基于 median/MAD 的鲁棒标准化；
+  - `itksnap_window`：按 case 自适应窗宽窗位（基于 Otsu 前景 + 对比度统计）后映射到 [0,1]。
 
 ---
 

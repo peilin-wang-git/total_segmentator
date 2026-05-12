@@ -17,7 +17,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--task", type=str, default="total_mr", help="TotalSegmentator task, default: total_mr")
     parser.add_argument("--device", type=str, default="gpu", choices=["gpu", "cpu"], help="Inference device for TotalSegmentator.")
     parser.add_argument("--gpu-id", type=int, default=0, help="GPU index to use when --device gpu.")
-    parser.add_argument("--intensity-norm", type=str, default="none", choices=["none", "zscore"], help="Intensity normalization before inference.")
+    parser.add_argument(
+        "--intensity-norm",
+        type=str,
+        default="none",
+        choices=["none", "zscore", "percentile_minmax", "zscore_robust", "itksnap_window"],
+        help="Intensity normalization before inference.",
+    )
     parser.add_argument("--fast", action="store_true", help="Enable fast mode if supported by model.")
     parser.add_argument("--no-preview", action="store_true", help="Disable preview PNG generation.")
     parser.add_argument("--keep-temp", action="store_true", help="Keep temporary normalized files.")

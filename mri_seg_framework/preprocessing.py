@@ -26,7 +26,7 @@ def normalize_intensity(image: sitk.Image, method: str = "none") -> sitk.Image:
     method = (method or "none").lower()
     if method == "none":
         return image
-    if method != "zscore":
+    if method not in {"zscore", "percentile_minmax", "zscore_robust", "itksnap_window"}:
         raise ValueError(f"Unsupported intensity normalization method: {method}")
 
     arr = sitk.GetArrayFromImage(image).astype(np.float32)
@@ -38,14 +38,76 @@ def normalize_intensity(image: sitk.Image, method: str = "none") -> sitk.Image:
     if p99 > p1:
         arr = np.clip(arr, p1, p99)
 
+    if method == "percentile_minmax":
+        lo = float(arr.min())
+        hi = float(arr.max())
+        if hi > lo:
+            arr = (arr - lo) / (hi - lo)
+        else:
+            arr = arr - lo
+        out = sitk.GetImageFromArray(arr)
+        out.CopyInformation(image)
+        return out
+
+    if method == "itksnap_window":
+        # Case-by-case adaptive windowing using image contrast statistics.
+        # 1) robust foreground estimation via Otsu on non-zero voxels
+        # 2) derive center from foreground median
+        # 3) adapt width from foreground std + robust global range
+        nonzero = arr[arr != 0]
+        if nonzero.size > 32:
+            try:
+                otsu = sitk.OtsuThresholdImageFilter()
+                otsu.SetInsideValue(0)
+                otsu.SetOutsideValue(1)
+                mask_img = otsu.Execute(sitk.GetImageFromArray(arr.astype(np.float32)))
+                mask = sitk.GetArrayFromImage(mask_img).astype(bool)
+                region = arr[mask] if np.any(mask) else nonzero
+            except Exception:
+                region = nonzero
+        else:
+            region = arr.reshape(-1)
+
+        center = float(np.median(region))
+        fg_std = float(np.std(region))
+        rg_low = float(np.percentile(arr, 0.5))
+        rg_high = float(np.percentile(arr, 99.5))
+        robust_range = max(rg_high - rg_low, 1e-6)
+
+        contrast_ratio = fg_std / robust_range
+        if contrast_ratio < 0.08:
+            width = 1.4 * robust_range
+        elif contrast_ratio < 0.16:
+            width = 1.8 * robust_range
+        else:
+            width = 2.2 * robust_range
+        width = max(width, 6.0 * fg_std, 1e-6)
+
+        p_low = center - 0.5 * width
+        p_high = center + 0.5 * width
+        arr = np.clip(arr, p_low, p_high)
+        arr = (arr - p_low) / max(p_high - p_low, 1e-6)
+        out = sitk.GetImageFromArray(arr.astype(np.float32))
+        out.CopyInformation(image)
+        return out
+
     mask = arr != 0
     region = arr[mask] if np.any(mask) else arr
-    mean = float(region.mean())
-    std = float(region.std())
-    if std > 1e-6:
-        arr = (arr - mean) / std
+    if method == "zscore":
+        mean = float(region.mean())
+        std = float(region.std())
+        if std > 1e-6:
+            arr = (arr - mean) / std
+        else:
+            arr = arr - mean
     else:
-        arr = arr - mean
+        median = float(np.median(region))
+        mad = float(np.median(np.abs(region - median)))
+        robust_std = 1.4826 * mad
+        if robust_std > 1e-6:
+            arr = (arr - median) / robust_std
+        else:
+            arr = arr - median
 
     out = sitk.GetImageFromArray(arr)
     out.CopyInformation(image)
