@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -67,7 +68,36 @@ class SegmentationPipeline:
         self.logger.info("Discovered %d candidate MRI files.", len(files))
 
         summary: List[Dict[str, Any]] = []
-        for input_file in files:
+        workers = max(int(self.cfg.num_threads), 1)
+        if workers > 1:
+            self.logger.info("Parallel mode enabled, workers=%d", workers)
+            print(f"[INFO] 并行处理开启: workers={workers}")
+        else:
+            self.logger.info("Single worker mode.")
+
+        if workers == 1:
+            for input_file in files:
+                summary.append(self._process_one_case(input_file, case_root, case_meta))
+        else:
+            with ThreadPoolExecutor(max_workers=workers) as executor:
+                future_to_case = {
+                    executor.submit(self._process_one_case, input_file, case_root, case_meta): input_file for input_file in files
+                }
+                for future in as_completed(future_to_case):
+                    summary.append(future.result())
+
+        summary_json = self.cfg.output_dir / "summary.json"
+        with summary_json.open("w", encoding="utf-8") as f:
+            json.dump(summary, f, ensure_ascii=False, indent=2)
+
+        pd.DataFrame(summary).to_csv(self.cfg.output_dir / "summary.csv", index=False)
+
+        ok = sum(1 for x in summary if x["status"] == "success")
+        failed = sum(1 for x in summary if x["status"] == "failed")
+        self.logger.info("Pipeline finished. success=%d failed=%d total=%d", ok, failed, len(summary))
+        return {"success": ok, "failed": failed, "total": len(summary), "summary": summary}
+
+    def _process_one_case(self, input_file: Path, case_root: Path, case_meta: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
             case_id = case_id_from_path(input_file, case_root)
             case_output = self._resolve_case_output_dir(input_file, case_id)
             case_output.mkdir(parents=True, exist_ok=True)
@@ -91,13 +121,35 @@ class SegmentationPipeline:
                 "csv_transpose": "",
                 "csv_flip": "",
             }
+            seg_path = case_output / "segmentation.nii.gz"
+            final_seg_path = self._build_final_seg_path(input_file)
+            processing_tag = case_output / ".processing.lock"
 
             try:
                 if self.cfg.dry_run:
                     entry["status"] = "dry_run_skipped"
                     entry["message"] = "Dry-run mode: inference skipped."
-                    summary.append(entry)
-                    continue
+                    return entry
+
+                if processing_tag.exists():
+                    msg = f"Skip case {case_id}: 发现处理中标签 {processing_tag}"
+                    print(msg)
+                    self.logger.info(msg)
+                    entry["status"] = "skipped_processing"
+                    entry["message"] = msg
+                    return entry
+
+                if final_seg_path.exists():
+                    msg = f"Skip case {case_id}: 已存在最终分割文件 {final_seg_path}"
+                    print(msg)
+                    self.logger.info(msg)
+                    entry["status"] = "skipped_exists"
+                    entry["message"] = msg
+                    entry["segmentation_path"] = str(final_seg_path)
+                    return entry
+
+                processing_tag.write_text("processing\n", encoding="utf-8")
+                print(f"Start case {case_id}: 创建处理中标签 {processing_tag}")
 
                 temp_dir = self.tmp_root / case_id
                 temp_dir.mkdir(parents=True, exist_ok=True)
@@ -114,7 +166,6 @@ class SegmentationPipeline:
                 entry["csv_flip"] = str(flip)
                 run_input_file = self._prepare_case_input_with_transform(input_file, temp_dir, transpose, flip)
 
-                seg_path = case_output / "segmentation.nii.gz"
                 label_map, preview_input, is_4d_case, normalized_qc_path = self._run_single_or_4d(run_input_file, temp_dir, seg_path)
                 entry["seg_nonzero_before_clean"] = self._seg_nonzero_voxels(seg_path)
                 if not is_4d_case and not self.cfg.official_compatible:
@@ -164,30 +215,25 @@ class SegmentationPipeline:
                 entry["status"] = "failed"
                 entry["message"] = f"{exc}\n{traceback.format_exc(limit=2)}"
                 self.logger.error("Case %s failed: %s", case_id, exc)
-
-            summary.append(entry)
-
-        summary_json = self.cfg.output_dir / "summary.json"
-        with summary_json.open("w", encoding="utf-8") as f:
-            json.dump(summary, f, ensure_ascii=False, indent=2)
-
-        pd.DataFrame(summary).to_csv(self.cfg.output_dir / "summary.csv", index=False)
-
-        ok = sum(1 for x in summary if x["status"] == "success")
-        failed = sum(1 for x in summary if x["status"] == "failed")
-        self.logger.info("Pipeline finished. success=%d failed=%d total=%d", ok, failed, len(summary))
-        return {"success": ok, "failed": failed, "total": len(summary), "summary": summary}
+            finally:
+                if processing_tag.exists():
+                    processing_tag.unlink(missing_ok=True)
+                    print(f"Finish case {case_id}: 删除处理中标签 {processing_tag}")
+            return entry
 
     def _save_seg_to_input_path(self, input_file: Path, generated_seg_path: Path) -> Path:
+        final_path = self._build_final_seg_path(input_file)
+        sitk.WriteImage(sitk.ReadImage(str(generated_seg_path)), str(final_path))
+        return final_path
+
+    def _build_final_seg_path(self, input_file: Path) -> Path:
         suffixes = "".join(input_file.suffixes)
         output_suffix = self.cfg.output_suffix or "_seg"
         if suffixes:
             output_name = input_file.name[: -len(suffixes)] + f"{output_suffix}{suffixes}"
         else:
             output_name = input_file.name + output_suffix
-        final_path = input_file.parent / output_name
-        sitk.WriteImage(sitk.ReadImage(str(generated_seg_path)), str(final_path))
-        return final_path
+        return input_file.parent / output_name
 
     def _resolve_case_output_dir(self, input_file: Path, case_id: str) -> Path:
         if not self.cfg.input_csv:

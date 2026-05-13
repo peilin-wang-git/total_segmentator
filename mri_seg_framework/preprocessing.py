@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import matplotlib
 import numpy as np
 import SimpleITK as sitk
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 
