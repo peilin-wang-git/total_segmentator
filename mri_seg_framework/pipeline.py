@@ -201,7 +201,7 @@ class SegmentationPipeline:
 
     def _run_single_or_4d(self, input_file: Path, temp_dir: Path, seg_path: Path) -> tuple[Dict[int, str], Optional[Path], bool, Optional[Path]]:
         image = sitk.ReadImage(str(input_file))
-        if image.GetDimension() < 4:
+        if not self._is_4d_like_image(image):
             original_orientation = get_orientation_code(image)
             if self.cfg.official_compatible:
                 normalized_input = prepare_official_compatible_input(input_file, temp_dir)
@@ -220,13 +220,18 @@ class SegmentationPipeline:
                 sitk.WriteImage(norm_img, str(norm_out))
             return label_map, norm_out, False, norm_out
 
-        frame_count = image.GetSize()[3]
+        if image.GetDimension() >= 4:
+            frame_count = image.GetSize()[3]
+            frame_getter = lambda idx: image[:, :, :, idx]
+        else:
+            frame_count = image.GetNumberOfComponentsPerPixel()
+            frame_getter = lambda idx: sitk.VectorIndexSelectionCast(image, idx)
         frame_outputs: List[sitk.Image] = []
         normalized_frames: List[sitk.Image] = []
         label_map: Dict[int, str] = {}
 
         for i in range(frame_count):
-            frame = image[:, :, :, i]
+            frame = frame_getter(i)
             frame_path = temp_dir / f"frame_{i:04d}.nii.gz"
             sitk.WriteImage(frame, str(frame_path))
 
@@ -238,13 +243,18 @@ class SegmentationPipeline:
             frame_outputs.append(sitk.ReadImage(str(frame_seg)))
 
         seg_4d = sitk.JoinSeries(frame_outputs)
-        seg_4d.CopyInformation(image)
+        if image.GetDimension() >= 4:
+            seg_4d.CopyInformation(image)
         sitk.WriteImage(seg_4d, str(seg_path))
         norm_4d = sitk.JoinSeries(normalized_frames)
-        norm_4d.CopyInformation(image)
+        if image.GetDimension() >= 4:
+            norm_4d.CopyInformation(image)
         norm_qc_path = temp_dir / "normalized_4d_input.nii.gz"
         sitk.WriteImage(norm_4d, str(norm_qc_path))
         return label_map, None, True, norm_qc_path
+
+    def _is_4d_like_image(self, image: sitk.Image) -> bool:
+        return image.GetDimension() >= 4 or image.GetNumberOfComponentsPerPixel() > 1
 
     def _looks_like_linear_0_1000(self, image: sitk.Image) -> bool:
         arr = sitk.GetArrayFromImage(image).astype(np.float32)
@@ -278,15 +288,22 @@ class SegmentationPipeline:
         if transpose == [0, 1, 2] and flip == [0, 0, 0]:
             return input_file
         image = sitk.ReadImage(str(input_file))
-        if image.GetDimension() == 3:
+        if not self._is_4d_like_image(image):
             transformed = apply_transpose_flip(image, transpose, flip)
-        elif image.GetDimension() == 4:
+        elif image.GetDimension() >= 4:
             transformed_frames: List[sitk.Image] = []
             frame_count = image.GetSize()[3]
             for i in range(frame_count):
                 frame = image[:, :, :, i]
                 transformed_frames.append(apply_transpose_flip(frame, transpose, flip))
             transformed = sitk.JoinSeries(transformed_frames)
+        elif image.GetDimension() == 3:
+            transformed_components: List[sitk.Image] = []
+            component_count = image.GetNumberOfComponentsPerPixel()
+            for i in range(component_count):
+                component = sitk.VectorIndexSelectionCast(image, i)
+                transformed_components.append(apply_transpose_flip(component, transpose, flip))
+            transformed = sitk.Compose(transformed_components)
         else:
             return input_file
         transformed_path = temp_dir / f"{input_file.stem}_csv_transformed.nii.gz"
