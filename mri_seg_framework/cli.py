@@ -27,6 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--fast", action="store_true", help="Enable fast mode if supported by model.")
     parser.add_argument("--no-preview", action="store_true", help="Disable preview PNG generation.")
     parser.add_argument("--keep-temp", action="store_true", help="Keep temporary normalized files.")
+    parser.add_argument(
+        "--num-threads",
+        type=int,
+        default=1,
+        help="Number of parallel worker threads used to process multiple cases.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Only scan and validate files, skip inference.")
     parser.add_argument("--no-official-compatible", action="store_true", help="Disable official-compatible preprocessing path.")
     return parser
@@ -62,6 +68,7 @@ def main() -> None:
     cfg.fast = args.fast
     cfg.preview = not args.no_preview
     cfg.keep_temp = args.keep_temp
+    cfg.num_threads = max(1, args.num_threads)
     cfg.dry_run = args.dry_run
     cfg.official_compatible = not args.no_official_compatible
 
