@@ -243,10 +243,12 @@ class SegmentationPipeline:
             frame_outputs.append(sitk.ReadImage(str(frame_seg)))
 
         seg_4d = sitk.JoinSeries(frame_outputs)
-        seg_4d.CopyInformation(image)
+        if image.GetDimension() >= 4:
+            seg_4d.CopyInformation(image)
         sitk.WriteImage(seg_4d, str(seg_path))
         norm_4d = sitk.JoinSeries(normalized_frames)
-        norm_4d.CopyInformation(image)
+        if image.GetDimension() >= 4:
+            norm_4d.CopyInformation(image)
         norm_qc_path = temp_dir / "normalized_4d_input.nii.gz"
         sitk.WriteImage(norm_4d, str(norm_qc_path))
         return label_map, None, True, norm_qc_path
